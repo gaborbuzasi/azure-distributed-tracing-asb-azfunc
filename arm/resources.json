@@ -1,5 +1,5 @@
 {
-    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
         "location": {
@@ -12,7 +12,10 @@
                 "westeurope"
             ]
         },
-        "storageAccountName": {
+        "resourceGroupName": {
+            "type": "string"
+        },
+        "storageAccountPrefix": {
             "type": "string"
         },
         "appServicePlanName": {
@@ -26,112 +29,128 @@
         }
     },
     "functions": [],
-    "variables": {},
+    "variables": {
+        "storageName": "[concat(parameters('storageAccountPrefix'), uniqueString(subscription().id, parameters('resourceGroupName')))]"
+    },
     "resources": [
         {
-            "name": "bgsf-asb-asfunc-correlation-poc",
             "type": "Microsoft.Resources/resourceGroups",
-            "apiVersion": "2019-10-01",
+            "apiVersion": "2020-06-01",
+            "name": "[parameters('resourceGroupName')]",
             "location": "[parameters('location')]",
             "tags": {
                 "PoC": "PoC"
-            },
-            "resources": [
-                {
-                    "name": "[parameters('storageAccountName')]",
-                    "type": "Microsoft.Storage/storageAccounts",
-                    "apiVersion": "2019-06-01",
-                    "tags": {
-                        "displayName": "BGSF Function Storage"
-                    },
-                    "location": "[parameters('location')]",
-                    "kind": "StorageV2",
-                    "sku": {
-                        "name": "Premium_LRS",
-                        "tier": "Premium"
-                    }
-                },
-                {
-                    "name": "[parameters('appServicePlanName')]",
-                    "type": "Microsoft.Web/serverfarms",
-                    "apiVersion": "2018-02-01",
-                    "location": "[parameters('location')]",
-                    "sku": {
-                        "name": "F1",
-                        "capacity": 1
-                    },
-                    "tags": {
-                        "displayName": "BGSF Function App Service Plan"
-                    },
-                    "properties": {
-                        "name": "[parameters('appServicePlanName')]"
-                    }
-                },
-
-                {
-                    "name": "[parameters('functionAppName')]",
-                    "type": "Microsoft.Web/sites",
-                    "apiVersion": "2018-11-01",
-                    "location": "[parameters('location')]",
-                    "kind": "functionapp",
-                    "dependsOn": [
-                        "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]",
-                        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
-                    ],
-                    "properties": {
-                        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]",
-                        "siteConfig": {
-                            "appSettings": [
-                                {
-                                    "name": "AzureWebJobsDashboard",
-                                    "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', parameters('storageAccountName'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')),'2015-05-01-preview').key1)]"
-                                },
-                                {
-                                    "name": "AzureWebJobsStorage",
-                                    "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', parameters('storageAccountName'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')),'2015-05-01-preview').key1)]"
-                                },
-                                {
-                                    "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
-                                    "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', parameters('storageAccountName'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')),'2015-05-01-preview').key1)]"
-                                },
-                                {
-                                    "name": "WEBSITE_CONTENTSHARE",
-                                    "value": "[toLower(parameters('functionAppName'))]"
-                                },
-                                {
-                                    "name": "FUNCTIONS_EXTENSION_VERSION",
-                                    "value": "~2"
-                                },
-                                {
-                                    "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
-                                    "value": "[reference(resourceId('microsoft.insights/components/', parameters('functionAppInsightsName')), '2015-05-01').InstrumentationKey]"
-                                },
-                                {
-                                    "name": "FUNCTIONS_WORKER_RUNTIME",
-                                    "value": "dotnet"
+            }
+        },
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-06-01",
+            "name": "resourcegroupresourcesdeployment",
+            "resourceGroup": "[parameters('resourceGroupName')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/resourceGroups/', parameters('resourceGroupName'))]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {},
+                    "variables": {},
+                    "resources": [
+                        {
+                            "type": "Microsoft.Storage/storageAccounts",
+                            "apiVersion": "2019-06-01",
+                            "name": "[variables('storageName')]",
+                            "location": "[parameters('location')]",
+                            "kind": "StorageV2",
+                            "sku": {
+                                "name": "Premium_LRS",
+                                "tier": "Premium"
+                            }
+                        },
+                        {
+                            "type": "Microsoft.Web/serverfarms",
+                            "apiVersion": "2018-02-01",
+                            "name": "[parameters('appServicePlanName')]",
+                            "location": "[parameters('location')]",
+                            "sku": {
+                                "name": "F1",
+                                "capacity": 1
+                            },
+                            "tags": {
+                                "displayName": "BGSF Function App Service Plan"
+                            },
+                            "properties": {
+                                "name": "[parameters('appServicePlanName')]"
+                            }
+                        },
+                        {
+                            "name": "[parameters('functionAppName')]",
+                            "type": "Microsoft.Web/sites",
+                            "apiVersion": "2018-11-01",
+                            "location": "[parameters('location')]",
+                            "kind": "functionapp",
+                            "dependsOn": [
+                                "[variables('storageName')]",
+                                "[parameters('appServicePlanName')]"
+                            ],
+                            "properties": {
+                                "serverFarmId": "[parameters('appServicePlanName')]",
+                                "siteConfig": {
+                                    "appSettings": [
+                                        {
+                                            "name": "AzureWebJobsDashboard",
+                                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageName'), ';AccountKey=', listKeys(resourceId(subscription().subscriptionId, parameters('resourceGroupName'), 'Microsoft.Storage/storageAccounts', variables('storageName')), '2019-06-01').key1)]"
+                                        },
+                                        {
+                                            "name": "AzureWebJobsStorage",
+                                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageName'), ';AccountKey=', listKeys(resourceId(subscription().subscriptionId, parameters('resourceGroupName'), 'Microsoft.Storage/storageAccounts', variables('storageName')), '2019-06-01').key1)]"
+                                        },
+                                        {
+                                            "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+                                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageName'), ';AccountKey=', listKeys(resourceId(subscription().subscriptionId, parameters('resourceGroupName'), 'Microsoft.Storage/storageAccounts', variables('storageName')), '2019-06-01').key1)]"
+                                        },
+                                        {
+                                            "name": "WEBSITE_CONTENTSHARE",
+                                            "value": "[toLower(parameters('functionAppName'))]"
+                                        },
+                                        {
+                                            "name": "FUNCTIONS_EXTENSION_VERSION",
+                                            "value": "~2"
+                                        },
+                                        {
+                                            "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+                                            "value": "[reference(resourceId('Microsoft.Insights/components', parameters('functionAppInsightsName')), '2019-06-01').InstrumentationKey]"
+                                        },
+                                        {
+                                            "name": "FUNCTIONS_WORKER_RUNTIME",
+                                            "value": "dotnet"
+                                        }
+                                    ]
                                 }
-                            ]
+                            }
+                        },
+                        {
+                            "name": "[parameters('functionAppInsightsName')]",
+                            "type": "Microsoft.Insights/components",
+                            "apiVersion": "2015-05-01",
+                            "location": "[parameters('location')]",
+                            "kind": "web",
+                            "tags": {
+                                "displayName": "AppInsights for BGSF Function App"
+                            },
+                            "dependsOn": [
+                                "[parameters('functionAppName')]"
+                            ],
+                            "properties": {
+                                "applicationId": "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]",
+                                "application_Type": "web"
+                            }
                         }
-                    }
-                },
-                {
-                    "name": "[parameters('functionAppInsightsName')]",
-                    "type": "Microsoft.Insights/components",
-                    "apiVersion": "2015-05-01",
-                    "location": "[parameters('location')]",
-                    "kind": "web",
-                    "tags": {
-                        "displayName": "AppInsights for BGSF Function App"
-                    },
-                    "dependsOn": [
-                        "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
-                    ],
-                    "properties": {
-                        "applicationId": "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]",
-                        "application_Type": "web"
-                    }
+                    ]
                 }
-            ]
+            }
         }
     ],
     "outputs": {}

@@ -5,14 +5,17 @@
         "location": {
             "value": "northeurope"
         },
-        "storageAccountName": {
-            "value": "func-storage"
+        "resourceGroupName": {
+            "value": "bgsf-asb-asfunc-correlation-poc"
+        },
+        "storageAccountPrefix": {
+            "value": "funcstorage"
         },
         "appServicePlanName": {
             "value": "func-app-plan"
         },
         "functionAppName": {
-            "value": "func-app"
+            "value": "bgsf-func-app"
         },
         "functionAppInsightsName": {
             "value": "func-app-ai"
